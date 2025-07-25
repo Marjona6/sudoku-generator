@@ -27,6 +27,7 @@
           <button id="solve-btn" class="btn secondary">Solve Puzzle</button>
           <button id="clear-btn" class="btn secondary">Clear Board</button>
           <button id="print-puzzle-btn" class="btn secondary">Print Puzzle</button>
+          <button id="create-book-btn" class="btn secondary">Create Sudoku Book</button>
         </div>
       </div>
 
@@ -76,6 +77,39 @@
         <div class="victory-actions">
           <button id="new-game-btn" class="btn secondary">New Game</button>
           <button id="close-modal-btn" class="btn secondary">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Book Creation Modal -->
+    <div id="book-modal" class="modal">
+      <div class="modal-content">
+        <div class="book-header">
+          <h2>📚 Create Sudoku Book</h2>
+          <p>Generate a multi-page PDF with multiple puzzles</p>
+        </div>
+        <div class="book-form">
+          <div class="form-group">
+            <label for="book-pages">Number of Pages:</label>
+            <input type="number" id="book-pages" min="1" max="50" value="5" />
+          </div>
+          <div class="form-group">
+            <label for="book-puzzles-per-page">Puzzles per Page:</label>
+            <input type="number" id="book-puzzles-per-page" min="1" max="6" value="6" />
+            <small style="color: #666; font-size: 0.8rem">Recommended: 4 puzzles (2x2 grid) or 6 puzzles (2x3 grid)</small>
+          </div>
+          <div class="form-group">
+            <label for="book-difficulty">Difficulty:</label>
+            <select id="book-difficulty">
+              <option value="easy">Easy</option>
+              <option value="medium">Medium</option>
+              <option value="hard">Hard</option>
+            </select>
+          </div>
+        </div>
+        <div class="book-actions">
+          <button id="generate-book-btn" class="btn primary">Generate Book</button>
+          <button id="close-book-modal-btn" class="btn secondary">Cancel</button>
         </div>
       </div>
     </div>

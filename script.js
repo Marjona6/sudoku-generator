@@ -74,6 +74,10 @@ class SudokuGenerator {
       this.printPuzzle();
     });
 
+    document.getElementById("create-book-btn").addEventListener("click", () => {
+      this.showBookModal();
+    });
+
     // Difficulty change
     document.getElementById("difficulty").addEventListener("change", (e) => {
       this.updateDifficultyDisplay(e.target.value);
@@ -87,6 +91,22 @@ class SudokuGenerator {
 
     document.getElementById("close-modal-btn").addEventListener("click", () => {
       this.hideVictoryModal();
+    });
+
+    // Book modal event listeners
+    document.getElementById("generate-book-btn").addEventListener("click", () => {
+      this.generateBook();
+    });
+
+    document.getElementById("close-book-modal-btn").addEventListener("click", () => {
+      this.hideBookModal();
+    });
+
+    // Close book modal when clicking outside
+    document.getElementById("book-modal").addEventListener("click", (e) => {
+      if (e.target.id === "book-modal") {
+        this.hideBookModal();
+      }
     });
 
     // Close modal when clicking outside
@@ -562,6 +582,264 @@ class SudokuGenerator {
 
   hideVictoryModal() {
     document.getElementById("victory-modal").style.display = "none";
+  }
+
+  showBookModal() {
+    document.getElementById("book-modal").style.display = "block";
+  }
+
+  hideBookModal() {
+    document.getElementById("book-modal").style.display = "none";
+  }
+
+  generateBook() {
+    const pages = parseInt(document.getElementById("book-pages").value);
+    const puzzlesPerPage = parseInt(document.getElementById("book-puzzles-per-page").value);
+    const difficulty = document.getElementById("book-difficulty").value;
+
+    if (pages < 1 || pages > 50) {
+      alert("Please enter a valid number of pages (1-50)");
+      return;
+    }
+
+    if (puzzlesPerPage < 1 || puzzlesPerPage > 6) {
+      alert("Please enter a valid number of puzzles per page (1-6)");
+      return;
+    }
+
+    this.hideBookModal();
+    this.createBookPDF(pages, puzzlesPerPage, difficulty);
+  }
+
+  createBookPDF(pages, puzzlesPerPage, difficulty) {
+    // Check if jsPDF is available
+    if (typeof window.jspdf === "undefined") {
+      this.loadJsPDF()
+        .then(() => {
+          this.createBookPDF(pages, puzzlesPerPage, difficulty);
+        })
+        .catch(() => {
+          alert("PDF library could not be loaded. Please check your internet connection and try again.");
+        });
+      return;
+    }
+
+    try {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      const totalPuzzles = pages * puzzlesPerPage;
+      let currentPuzzle = 0;
+
+      for (let page = 0; page < pages; page++) {
+        if (page > 0) {
+          doc.addPage();
+        }
+
+        // Calculate grid layout based on puzzles per page
+        let gridCols, gridRows;
+        if (puzzlesPerPage === 6) {
+          // Use 2x3 layout for 6 puzzles (better fit)
+          gridCols = 2;
+          gridRows = 3;
+        } else {
+          gridCols = Math.ceil(Math.sqrt(puzzlesPerPage));
+          gridRows = Math.ceil(puzzlesPerPage / gridCols);
+        }
+
+        const pageWidth = 215.9; // 8.5" width in mm
+        const pageHeight = 279.4; // 11" height in mm
+        const margin = 15; // margin in mm
+        const availableWidth = pageWidth - 2 * margin;
+        const availableHeight = pageHeight - 2 * margin;
+
+        const gridWidth = availableWidth / gridCols;
+        const gridHeight = availableHeight / gridRows;
+
+        // Calculate grid size (larger grids with less spacing)
+        const gridSize = Math.min(gridWidth, gridHeight) * 0.9;
+        const cellSize = gridSize / 9;
+
+        for (let row = 0; row < gridRows; row++) {
+          for (let col = 0; col < gridCols; col++) {
+            const puzzleIndex = row * gridCols + col;
+            if (puzzleIndex >= puzzlesPerPage) break;
+
+            // Generate a new puzzle
+            const puzzle = this.generatePuzzleForBook(difficulty);
+
+            // Calculate position for this grid
+            const startX = margin + col * gridWidth + (gridWidth - gridSize) / 2;
+            const startY = margin + row * gridHeight + (gridHeight - gridSize) / 2;
+
+            // Draw the Sudoku grid
+            this.drawSudokuGrid(doc, puzzle, startX, startY, gridSize, cellSize, puzzlesPerPage);
+
+            currentPuzzle++;
+          }
+        }
+      }
+
+      // Save the PDF
+      const dateStr = new Date().toLocaleDateString().replace(/\//g, "-");
+      doc.save(`sudoku-book-${difficulty}-${pages}pages-${dateStr}.pdf`);
+    } catch (error) {
+      console.error("Error generating book:", error);
+      alert("There was an error generating the book. Please try again.");
+    }
+  }
+
+  generatePuzzleForBook(difficulty) {
+    // Create a temporary solution and puzzle
+    const solution = Array(9)
+      .fill()
+      .map(() => Array(9).fill(0));
+    const puzzle = Array(9)
+      .fill()
+      .map(() => Array(9).fill(0));
+
+    // Generate solution using the same method as the main game
+    this.generateSolutionForBook(solution);
+
+    // Copy solution to puzzle
+    for (let row = 0; row < 9; row++) {
+      for (let col = 0; col < 9; col++) {
+        puzzle[row][col] = solution[row][col];
+      }
+    }
+
+    // Remove cells based on difficulty
+    let cellsToRemove;
+    switch (difficulty) {
+      case "easy":
+        cellsToRemove = 30;
+        break;
+      case "medium":
+        cellsToRemove = 45;
+        break;
+      case "hard":
+        cellsToRemove = 55;
+        break;
+      default:
+        cellsToRemove = 30;
+    }
+
+    this.removeCellsForBook(puzzle, cellsToRemove);
+    return puzzle;
+  }
+
+  generateSolutionForBook(solution) {
+    // Use the same solution generation as the main game
+    const basePattern = [
+      [5, 3, 4, 6, 7, 8, 9, 1, 2],
+      [6, 7, 2, 1, 9, 5, 3, 4, 8],
+      [1, 9, 8, 3, 4, 2, 5, 6, 7],
+      [8, 5, 9, 7, 6, 1, 4, 2, 3],
+      [4, 2, 6, 8, 5, 3, 7, 9, 1],
+      [7, 1, 3, 9, 2, 4, 8, 5, 6],
+      [9, 6, 1, 5, 3, 7, 2, 8, 4],
+      [2, 8, 7, 4, 1, 9, 6, 3, 5],
+      [3, 4, 5, 2, 8, 6, 1, 7, 9],
+    ];
+
+    // Apply random transformations
+    this.applyRandomTransformationsForBook(basePattern);
+
+    // Copy to solution
+    for (let row = 0; row < 9; row++) {
+      for (let col = 0; col < 9; col++) {
+        solution[row][col] = basePattern[row][col];
+      }
+    }
+  }
+
+  applyRandomTransformationsForBook(pattern) {
+    const transformations = [() => this.shuffleRows(pattern), () => this.shuffleColumns(pattern), () => this.shuffleNumbers(pattern), () => this.transposeGrid(pattern), () => this.rotateGrid(pattern)];
+
+    const numTransformations = 3 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < numTransformations; i++) {
+      const randomTransform = transformations[Math.floor(Math.random() * transformations.length)];
+      randomTransform();
+    }
+  }
+
+  removeCellsForBook(puzzle, cellsToRemove) {
+    const positionsToRemove = new Set();
+
+    // First, ensure each 3x3 block has at least one empty space
+    for (let blockRow = 0; blockRow < 3; blockRow++) {
+      for (let blockCol = 0; blockCol < 3; blockCol++) {
+        const startRow = blockRow * 3;
+        const startCol = blockCol * 3;
+        const row = startRow + Math.floor(Math.random() * 3);
+        const col = startCol + Math.floor(Math.random() * 3);
+        const position = `${row},${col}`;
+        positionsToRemove.add(position);
+      }
+    }
+
+    // Now randomly select the remaining positions to remove
+    while (positionsToRemove.size < cellsToRemove) {
+      const row = Math.floor(Math.random() * 9);
+      const col = Math.floor(Math.random() * 9);
+      const position = `${row},${col}`;
+
+      if (!positionsToRemove.has(position)) {
+        positionsToRemove.add(position);
+      }
+    }
+
+    // Remove the selected cells
+    for (const position of positionsToRemove) {
+      const [row, col] = position.split(",").map(Number);
+      puzzle[row][col] = 0;
+    }
+  }
+
+  drawSudokuGrid(doc, puzzle, startX, startY, gridSize, cellSize, puzzlesPerPage = 4) {
+    // Draw grid lines
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.2);
+
+    // Draw thin lines for all cells
+    for (let i = 0; i <= 9; i++) {
+      const pos = startX + i * cellSize;
+      doc.line(pos, startY, pos, startY + gridSize);
+      doc.line(startX, startY + i * cellSize, startX + gridSize, startY + i * cellSize);
+    }
+
+    // Draw thick lines for 3x3 blocks
+    doc.setLineWidth(0.5);
+    for (let i = 0; i <= 9; i += 3) {
+      const pos = startX + i * cellSize;
+      doc.line(pos, startY, pos, startY + gridSize);
+      doc.line(startX, startY + i * cellSize, startX + gridSize, startY + i * cellSize);
+    }
+
+    // Adjust font size based on number of puzzles per page
+    let fontSize;
+    if (puzzlesPerPage === 6) {
+      fontSize = 12; // Same readable font size for 6 puzzles (good space with 2x3 layout)
+    } else if (puzzlesPerPage === 4) {
+      fontSize = 12; // Standard font for 4 puzzles
+    } else {
+      fontSize = 14; // Larger font for fewer puzzles
+    }
+
+    // Fill in the numbers
+    doc.setFontSize(fontSize);
+    doc.setTextColor(0, 0, 0);
+
+    for (let row = 0; row < 9; row++) {
+      for (let col = 0; col < 9; col++) {
+        const value = puzzle[row][col];
+        if (value !== 0) {
+          const x = startX + col * cellSize + cellSize / 2;
+          const y = startY + row * cellSize + cellSize / 2 + 3; // +3 for vertical centering with larger font
+          doc.text(value.toString(), x, y, { align: "center" });
+        }
+      }
+    }
   }
 
   printPuzzle() {
