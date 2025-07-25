@@ -78,6 +78,10 @@ class SudokuGenerator {
       this.showBookModal();
     });
 
+    document.getElementById("create-shortcut-btn").addEventListener("click", () => {
+      this.createShortcutBook();
+    });
+
     // Difficulty change
     document.getElementById("difficulty").addEventListener("change", (e) => {
       this.updateDifficultyDisplay(e.target.value);
@@ -611,6 +615,230 @@ class SudokuGenerator {
     this.createBookPDFs(pages, puzzlesPerPage, difficulty);
   }
 
+  createShortcutBook() {
+    // Check if jsPDF is available
+    if (typeof window.jspdf === "undefined") {
+      this.loadJsPDF()
+        .then(() => {
+          this.createShortcutBook();
+        })
+        .catch(() => {
+          alert("PDF library could not be loaded. Please check your internet connection and try again.");
+        });
+      return;
+    }
+
+    try {
+      const pages = 25;
+      const puzzlesPerPage = 6;
+      const difficulties = ["easy", "medium", "hard"];
+
+      // Show progress message
+      const progressDiv = document.createElement("div");
+      progressDiv.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: white;
+        border: 2px solid #667eea;
+        border-radius: 10px;
+        padding: 20px;
+        z-index: 10000;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        text-align: center;
+      `;
+      progressDiv.innerHTML = `
+        <h3>Creating Shortcut Book...</h3>
+        <p>This will generate 1 PDF with 150 pages total</p>
+        <p>Please wait...</p>
+      `;
+      document.body.appendChild(progressDiv);
+
+      // Create single PDF document
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF("p", "mm", "letter"); // 8.5x11"
+
+      let currentPage = 0;
+      let currentDifficulty = 0;
+
+      const processNextDifficulty = () => {
+        if (currentDifficulty >= difficulties.length) {
+          // All done
+          document.body.removeChild(progressDiv);
+          const dateStr = new Date().toLocaleDateString().replace(/\//g, "-");
+          doc.save(`sudoku-shortcut-book-${dateStr}.pdf`);
+          alert("Shortcut book creation complete! 1 PDF with 150 pages has been generated.");
+          return;
+        }
+
+        const difficulty = difficulties[currentDifficulty];
+        progressDiv.innerHTML = `
+          <h3>Creating ${difficulty} puzzles and solutions...</h3>
+          <p>Processing: ${currentDifficulty + 1} of 3</p>
+          <p>Please wait...</p>
+        `;
+
+        // Generate all puzzles and solutions for this difficulty
+        const totalPuzzles = pages * puzzlesPerPage;
+        const puzzles = [];
+        const solutions = [];
+        const originalNumbers = [];
+
+        for (let i = 0; i < totalPuzzles; i++) {
+          const puzzleData = this.generatePuzzleWithSolution(difficulty);
+          puzzles.push(puzzleData.puzzle);
+          solutions.push(puzzleData.solution);
+          originalNumbers.push(puzzleData.originalNumbers);
+        }
+
+        // Add puzzle pages to the document
+        this.addPuzzlePagesToDocument(doc, puzzles, pages, puzzlesPerPage, difficulty, currentPage);
+        currentPage += pages;
+
+        // Add solution pages to the document
+        this.addSolutionPagesToDocument(doc, solutions, originalNumbers, pages, puzzlesPerPage, difficulty, currentPage);
+        currentPage += pages;
+
+        // Move to next difficulty
+        currentDifficulty++;
+        setTimeout(processNextDifficulty, 100);
+      };
+
+      // Start processing
+      processNextDifficulty();
+    } catch (error) {
+      console.error("Error generating shortcut book:", error);
+      alert("There was an error generating the shortcut book. Please try again.");
+      // Remove progress div if it exists
+      const existingProgress = document.querySelector('div[style*="position: fixed"]');
+      if (existingProgress) {
+        document.body.removeChild(existingProgress);
+      }
+    }
+  }
+
+  addPuzzlePagesToDocument(doc, puzzles, pages, puzzlesPerPage, difficulty, startPage) {
+    let currentPuzzle = 0;
+
+    for (let page = 0; page < pages; page++) {
+      if (startPage + page > 0) {
+        doc.addPage();
+      }
+
+      // Calculate grid layout based on puzzles per page
+      let gridCols, gridRows;
+      if (puzzlesPerPage === 6) {
+        gridCols = 2;
+        gridRows = 3;
+      } else {
+        gridCols = Math.ceil(Math.sqrt(puzzlesPerPage));
+        gridRows = Math.ceil(puzzlesPerPage / gridCols);
+      }
+
+      const pageWidth = 215.9; // 8.5" width in mm (letter size)
+      const pageHeight = 279.4; // 11" height in mm (letter size)
+      const margin = 15; // margin in mm
+      const availableWidth = pageWidth - 2 * margin;
+      const availableHeight = pageHeight - 2 * margin;
+
+      const gridWidth = availableWidth / gridCols;
+      const gridHeight = availableHeight / gridRows;
+
+      // Calculate grid size (accounting for title space)
+      const titleHeight = 8; // Space for title
+      const gridSize = Math.min(gridWidth, gridHeight - titleHeight) * 0.9;
+      const cellSize = gridSize / 9;
+
+      for (let row = 0; row < gridRows; row++) {
+        for (let col = 0; col < gridCols; col++) {
+          const puzzleIndex = row * gridCols + col;
+          if (puzzleIndex >= puzzlesPerPage) break;
+
+          const puzzle = puzzles[currentPuzzle];
+          const puzzleNumber = currentPuzzle + 1;
+
+          // Calculate position for this grid
+          const startX = margin + col * gridWidth + (gridWidth - gridSize) / 2;
+          const startY = margin + row * gridHeight + (gridHeight - gridSize) / 2;
+
+          // Draw title
+          const title = `${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)} Puzzle ${puzzleNumber}`;
+          doc.setFontSize(10);
+          doc.setFont("helvetica", "bold");
+          doc.setTextColor(0, 0, 0);
+          doc.text(title, startX, startY - 2);
+
+          // Draw the Sudoku grid
+          this.drawSudokuGrid(doc, puzzle, startX, startY, gridSize, cellSize, puzzlesPerPage, false);
+
+          currentPuzzle++;
+        }
+      }
+    }
+  }
+
+  addSolutionPagesToDocument(doc, solutions, originalNumbers, pages, puzzlesPerPage, difficulty, startPage) {
+    let currentPuzzle = 0;
+
+    for (let page = 0; page < pages; page++) {
+      if (startPage + page > 0) {
+        doc.addPage();
+      }
+
+      // Calculate grid layout based on puzzles per page
+      let gridCols, gridRows;
+      if (puzzlesPerPage === 6) {
+        gridCols = 2;
+        gridRows = 3;
+      } else {
+        gridCols = Math.ceil(Math.sqrt(puzzlesPerPage));
+        gridRows = Math.ceil(puzzlesPerPage / gridCols);
+      }
+
+      const pageWidth = 215.9; // 8.5" width in mm (letter size)
+      const pageHeight = 279.4; // 11" height in mm (letter size)
+      const margin = 15; // margin in mm
+      const availableWidth = pageWidth - 2 * margin;
+      const availableHeight = pageHeight - 2 * margin;
+
+      const gridWidth = availableWidth / gridCols;
+      const gridHeight = availableHeight / gridRows;
+
+      // Calculate grid size (accounting for title space)
+      const titleHeight = 8; // Space for title
+      const gridSize = Math.min(gridWidth, gridHeight - titleHeight) * 0.9;
+      const cellSize = gridSize / 9;
+
+      for (let row = 0; row < gridRows; row++) {
+        for (let col = 0; col < gridCols; col++) {
+          const puzzleIndex = row * gridCols + col;
+          if (puzzleIndex >= puzzlesPerPage) break;
+
+          const solution = solutions[currentPuzzle];
+          const originalPuzzleNumbers = originalNumbers[currentPuzzle];
+          const puzzleNumber = currentPuzzle + 1;
+
+          // Calculate position for this grid
+          const startX = margin + col * gridWidth + (gridWidth - gridSize) / 2;
+          const startY = margin + row * gridHeight + (gridHeight - gridSize) / 2;
+
+          // Draw title
+          const title = `${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)} Puzzle ${puzzleNumber} - Solution`;
+          doc.setFontSize(10);
+          doc.setFont("helvetica", "bold");
+          doc.setTextColor(0, 0, 0);
+          doc.text(title, startX, startY - 2);
+
+          // Draw the Sudoku grid with solution
+          this.drawSudokuGrid(doc, solution, startX, startY, gridSize, cellSize, puzzlesPerPage, true, originalPuzzleNumbers);
+
+          currentPuzzle++;
+        }
+      }
+    }
+  }
+
   createBookPDFs(pages, puzzlesPerPage, difficulty) {
     // Check if jsPDF is available
     if (typeof window.jspdf === "undefined") {
@@ -702,7 +930,7 @@ class SudokuGenerator {
 
   createPuzzlePDF(puzzles, pages, puzzlesPerPage, difficulty) {
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
+    const doc = new jsPDF("p", "mm", "letter"); // 'letter' = 8.5x11"
 
     let currentPuzzle = 0;
 
@@ -721,8 +949,8 @@ class SudokuGenerator {
         gridRows = Math.ceil(puzzlesPerPage / gridCols);
       }
 
-      const pageWidth = 215.9; // 8.5" width in mm
-      const pageHeight = 279.4; // 11" height in mm
+      const pageWidth = 215.9; // 8.5" width in mm (letter size)
+      const pageHeight = 279.4; // 11" height in mm (letter size)
       const margin = 15; // margin in mm
       const availableWidth = pageWidth - 2 * margin;
       const availableHeight = pageHeight - 2 * margin;
@@ -769,7 +997,7 @@ class SudokuGenerator {
 
   createSolutionPDF(solutions, originalNumbers, pages, puzzlesPerPage, difficulty) {
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
+    const doc = new jsPDF("p", "mm", "letter"); // 'letter' = 8.5x11"
 
     let currentPuzzle = 0;
 
@@ -788,8 +1016,8 @@ class SudokuGenerator {
         gridRows = Math.ceil(puzzlesPerPage / gridCols);
       }
 
-      const pageWidth = 215.9; // 8.5" width in mm
-      const pageHeight = 279.4; // 11" height in mm
+      const pageWidth = 215.9; // 8.5" width in mm (letter size)
+      const pageHeight = 279.4; // 11" height in mm (letter size)
       const margin = 15; // margin in mm
       const availableWidth = pageWidth - 2 * margin;
       const availableHeight = pageHeight - 2 * margin;
