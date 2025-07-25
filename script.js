@@ -608,15 +608,15 @@ class SudokuGenerator {
     }
 
     this.hideBookModal();
-    this.createBookPDF(pages, puzzlesPerPage, difficulty);
+    this.createBookPDFs(pages, puzzlesPerPage, difficulty);
   }
 
-  createBookPDF(pages, puzzlesPerPage, difficulty) {
+  createBookPDFs(pages, puzzlesPerPage, difficulty) {
     // Check if jsPDF is available
     if (typeof window.jspdf === "undefined") {
       this.loadJsPDF()
         .then(() => {
-          this.createBookPDF(pages, puzzlesPerPage, difficulty);
+          this.createBookPDFs(pages, puzzlesPerPage, difficulty);
         })
         .catch(() => {
           alert("PDF library could not be loaded. Please check your internet connection and try again.");
@@ -625,71 +625,31 @@ class SudokuGenerator {
     }
 
     try {
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF();
-
+      // Generate all puzzles and solutions first
       const totalPuzzles = pages * puzzlesPerPage;
-      let currentPuzzle = 0;
+      const puzzles = [];
+      const solutions = [];
+      const originalNumbers = [];
 
-      for (let page = 0; page < pages; page++) {
-        if (page > 0) {
-          doc.addPage();
-        }
-
-        // Calculate grid layout based on puzzles per page
-        let gridCols, gridRows;
-        if (puzzlesPerPage === 6) {
-          // Use 2x3 layout for 6 puzzles (better fit)
-          gridCols = 2;
-          gridRows = 3;
-        } else {
-          gridCols = Math.ceil(Math.sqrt(puzzlesPerPage));
-          gridRows = Math.ceil(puzzlesPerPage / gridCols);
-        }
-
-        const pageWidth = 215.9; // 8.5" width in mm
-        const pageHeight = 279.4; // 11" height in mm
-        const margin = 15; // margin in mm
-        const availableWidth = pageWidth - 2 * margin;
-        const availableHeight = pageHeight - 2 * margin;
-
-        const gridWidth = availableWidth / gridCols;
-        const gridHeight = availableHeight / gridRows;
-
-        // Calculate grid size (larger grids with less spacing)
-        const gridSize = Math.min(gridWidth, gridHeight) * 0.9;
-        const cellSize = gridSize / 9;
-
-        for (let row = 0; row < gridRows; row++) {
-          for (let col = 0; col < gridCols; col++) {
-            const puzzleIndex = row * gridCols + col;
-            if (puzzleIndex >= puzzlesPerPage) break;
-
-            // Generate a new puzzle
-            const puzzle = this.generatePuzzleForBook(difficulty);
-
-            // Calculate position for this grid
-            const startX = margin + col * gridWidth + (gridWidth - gridSize) / 2;
-            const startY = margin + row * gridHeight + (gridHeight - gridSize) / 2;
-
-            // Draw the Sudoku grid
-            this.drawSudokuGrid(doc, puzzle, startX, startY, gridSize, cellSize, puzzlesPerPage);
-
-            currentPuzzle++;
-          }
-        }
+      for (let i = 0; i < totalPuzzles; i++) {
+        const puzzleData = this.generatePuzzleWithSolution(difficulty);
+        puzzles.push(puzzleData.puzzle);
+        solutions.push(puzzleData.solution);
+        originalNumbers.push(puzzleData.originalNumbers);
       }
 
-      // Save the PDF
-      const dateStr = new Date().toLocaleDateString().replace(/\//g, "-");
-      doc.save(`sudoku-book-${difficulty}-${pages}pages-${dateStr}.pdf`);
+      // Generate puzzle PDF
+      this.createPuzzlePDF(puzzles, pages, puzzlesPerPage, difficulty);
+
+      // Generate solution PDF
+      this.createSolutionPDF(solutions, originalNumbers, pages, puzzlesPerPage, difficulty);
     } catch (error) {
-      console.error("Error generating book:", error);
-      alert("There was an error generating the book. Please try again.");
+      console.error("Error generating books:", error);
+      alert("There was an error generating the books. Please try again.");
     }
   }
 
-  generatePuzzleForBook(difficulty) {
+  generatePuzzleWithSolution(difficulty) {
     // Create a temporary solution and puzzle
     const solution = Array(9)
       .fill()
@@ -725,7 +685,154 @@ class SudokuGenerator {
     }
 
     this.removeCellsForBook(puzzle, cellsToRemove);
-    return puzzle;
+
+    // Create a map of original puzzle numbers (non-zero values)
+    const originalNumbers = Array(9)
+      .fill()
+      .map(() => Array(9).fill(false));
+
+    for (let row = 0; row < 9; row++) {
+      for (let col = 0; col < 9; col++) {
+        originalNumbers[row][col] = puzzle[row][col] !== 0;
+      }
+    }
+
+    return { puzzle, solution, originalNumbers };
+  }
+
+  createPuzzlePDF(puzzles, pages, puzzlesPerPage, difficulty) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+
+    let currentPuzzle = 0;
+
+    for (let page = 0; page < pages; page++) {
+      if (page > 0) {
+        doc.addPage();
+      }
+
+      // Calculate grid layout based on puzzles per page
+      let gridCols, gridRows;
+      if (puzzlesPerPage === 6) {
+        gridCols = 2;
+        gridRows = 3;
+      } else {
+        gridCols = Math.ceil(Math.sqrt(puzzlesPerPage));
+        gridRows = Math.ceil(puzzlesPerPage / gridCols);
+      }
+
+      const pageWidth = 215.9; // 8.5" width in mm
+      const pageHeight = 279.4; // 11" height in mm
+      const margin = 15; // margin in mm
+      const availableWidth = pageWidth - 2 * margin;
+      const availableHeight = pageHeight - 2 * margin;
+
+      const gridWidth = availableWidth / gridCols;
+      const gridHeight = availableHeight / gridRows;
+
+      // Calculate grid size (accounting for title space)
+      const titleHeight = 8; // Space for title
+      const gridSize = Math.min(gridWidth, gridHeight - titleHeight) * 0.9;
+      const cellSize = gridSize / 9;
+
+      for (let row = 0; row < gridRows; row++) {
+        for (let col = 0; col < gridCols; col++) {
+          const puzzleIndex = row * gridCols + col;
+          if (puzzleIndex >= puzzlesPerPage) break;
+
+          const puzzle = puzzles[currentPuzzle];
+          const puzzleNumber = currentPuzzle + 1;
+
+          // Calculate position for this grid
+          const startX = margin + col * gridWidth + (gridWidth - gridSize) / 2;
+          const startY = margin + row * gridHeight + (gridHeight - gridSize) / 2;
+
+          // Draw title
+          const title = `${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)} Puzzle ${puzzleNumber}`;
+          doc.setFontSize(10);
+          doc.setFont("helvetica", "bold");
+          doc.setTextColor(0, 0, 0);
+          doc.text(title, startX, startY - 2);
+
+          // Draw the Sudoku grid
+          this.drawSudokuGrid(doc, puzzle, startX, startY, gridSize, cellSize, puzzlesPerPage, false);
+
+          currentPuzzle++;
+        }
+      }
+    }
+
+    // Save the puzzle PDF
+    const dateStr = new Date().toLocaleDateString().replace(/\//g, "-");
+    doc.save(`sudoku-puzzles-${difficulty}-${pages}pages-${dateStr}.pdf`);
+  }
+
+  createSolutionPDF(solutions, originalNumbers, pages, puzzlesPerPage, difficulty) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+
+    let currentPuzzle = 0;
+
+    for (let page = 0; page < pages; page++) {
+      if (page > 0) {
+        doc.addPage();
+      }
+
+      // Calculate grid layout based on puzzles per page
+      let gridCols, gridRows;
+      if (puzzlesPerPage === 6) {
+        gridCols = 2;
+        gridRows = 3;
+      } else {
+        gridCols = Math.ceil(Math.sqrt(puzzlesPerPage));
+        gridRows = Math.ceil(puzzlesPerPage / gridCols);
+      }
+
+      const pageWidth = 215.9; // 8.5" width in mm
+      const pageHeight = 279.4; // 11" height in mm
+      const margin = 15; // margin in mm
+      const availableWidth = pageWidth - 2 * margin;
+      const availableHeight = pageHeight - 2 * margin;
+
+      const gridWidth = availableWidth / gridCols;
+      const gridHeight = availableHeight / gridRows;
+
+      // Calculate grid size (accounting for title space)
+      const titleHeight = 8; // Space for title
+      const gridSize = Math.min(gridWidth, gridHeight - titleHeight) * 0.9;
+      const cellSize = gridSize / 9;
+
+      for (let row = 0; row < gridRows; row++) {
+        for (let col = 0; col < gridCols; col++) {
+          const puzzleIndex = row * gridCols + col;
+          if (puzzleIndex >= puzzlesPerPage) break;
+
+          const solution = solutions[currentPuzzle];
+          const originalPuzzleNumbers = originalNumbers[currentPuzzle];
+          const puzzleNumber = currentPuzzle + 1;
+
+          // Calculate position for this grid
+          const startX = margin + col * gridWidth + (gridWidth - gridSize) / 2;
+          const startY = margin + row * gridHeight + (gridHeight - gridSize) / 2;
+
+          // Draw title
+          const title = `${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)} Puzzle ${puzzleNumber} - Solution`;
+          doc.setFontSize(10);
+          doc.setFont("helvetica", "bold");
+          doc.setTextColor(0, 0, 0);
+          doc.text(title, startX, startY - 2);
+
+          // Draw the Sudoku grid with solution
+          this.drawSudokuGrid(doc, solution, startX, startY, gridSize, cellSize, puzzlesPerPage, true, originalPuzzleNumbers);
+
+          currentPuzzle++;
+        }
+      }
+    }
+
+    // Save the solution PDF
+    const dateStr = new Date().toLocaleDateString().replace(/\//g, "-");
+    doc.save(`sudoku-solutions-${difficulty}-${pages}pages-${dateStr}.pdf`);
   }
 
   generateSolutionForBook(solution) {
@@ -796,7 +903,7 @@ class SudokuGenerator {
     }
   }
 
-  drawSudokuGrid(doc, puzzle, startX, startY, gridSize, cellSize, puzzlesPerPage = 4) {
+  drawSudokuGrid(doc, puzzle, startX, startY, gridSize, cellSize, puzzlesPerPage = 4, isSolution = false, originalNumbers = null) {
     // Draw grid lines
     doc.setDrawColor(0, 0, 0);
     doc.setLineWidth(0.2);
@@ -819,24 +926,41 @@ class SudokuGenerator {
     // Adjust font size based on number of puzzles per page
     let fontSize;
     if (puzzlesPerPage === 6) {
-      fontSize = 12; // Same readable font size for 6 puzzles (good space with 2x3 layout)
+      fontSize = 14; // Larger font for 6 puzzles
     } else if (puzzlesPerPage === 4) {
-      fontSize = 12; // Standard font for 4 puzzles
+      fontSize = 16; // Larger font for 4 puzzles
     } else {
-      fontSize = 14; // Larger font for fewer puzzles
+      fontSize = 18; // Larger font for fewer puzzles
     }
 
-    // Fill in the numbers
+    // Set font to sans-serif
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(fontSize);
-    doc.setTextColor(0, 0, 0);
+    doc.setTextColor(0, 0, 0); // All numbers in black
 
     for (let row = 0; row < 9; row++) {
       for (let col = 0; col < 9; col++) {
         const value = puzzle[row][col];
         if (value !== 0) {
+          // Calculate center position of the cell
           const x = startX + col * cellSize + cellSize / 2;
-          const y = startY + row * cellSize + cellSize / 2 + 3; // +3 for vertical centering with larger font
-          doc.text(value.toString(), x, y, { align: "center" });
+
+          // Check if this is an original number (in both puzzles and solutions)
+          const isOriginalNumber = originalNumbers ? originalNumbers[row][col] : true;
+
+          if (isOriginalNumber) {
+            // Original numbers in bold
+            doc.setFont("helvetica", "bold");
+            // Adjust Y position for bold font
+            const y = startY + row * cellSize + cellSize / 2 + fontSize * 0.1;
+            doc.text(value.toString(), x, y, { align: "center" });
+          } else {
+            // Solution numbers in normal weight
+            doc.setFont("helvetica", "normal");
+            // Adjust Y position for normal font
+            const y = startY + row * cellSize + cellSize / 2 + fontSize * 0.1;
+            doc.text(value.toString(), x, y, { align: "center" });
+          }
         }
       }
     }
@@ -909,7 +1033,7 @@ class SudokuGenerator {
           const value = this.puzzle[row][col];
           if (value !== 0) {
             const x = startX + col * cellSize + cellSize / 2;
-            const y = startY + row * cellSize + cellSize / 2 + 5; // +5 for vertical centering
+            const y = startY + row * cellSize + cellSize / 2 + 9; // +9 for vertical centering
             doc.text(value.toString(), x, y, { align: "center" });
           }
         }
