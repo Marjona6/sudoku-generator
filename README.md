@@ -2,6 +2,8 @@
 
 A complete Sudoku puzzle generator and solver built with HTML, CSS, and vanilla JavaScript that runs entirely in the browser.
 
+View online at: https://marjona6.github.io/sudoku-generator/
+
 ## Features
 
 ### 🎮 Game Features
