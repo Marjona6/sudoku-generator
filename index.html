@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sudoku Generator</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>Sudoku Generator</h1>
+        <p>Generate and solve Sudoku puzzles at different difficulty levels</p>
+      </header>
+
+      <div class="controls">
+        <div class="difficulty-selector">
+          <label for="difficulty">Difficulty:</label>
+          <select id="difficulty">
+            <option value="easy">Easy</option>
+            <option value="medium">Medium</option>
+            <option value="hard">Hard</option>
+          </select>
+        </div>
+        <div class="buttons">
+          <button id="generate-btn" class="btn primary">Generate New Puzzle</button>
+          <button id="solve-btn" class="btn secondary">Solve Puzzle</button>
+          <button id="clear-btn" class="btn secondary">Clear Board</button>
+          <button id="print-puzzle-btn" class="btn secondary">Print Puzzle</button>
+        </div>
+      </div>
+
+      <div class="game-container">
+        <div id="sudoku-board" class="sudoku-board"></div>
+        <div class="game-info">
+          <div class="timer">
+            <span>Time: </span>
+            <span id="timer">00:00</span>
+          </div>
+          <div class="difficulty-info">
+            <span>Current: </span>
+            <span id="current-difficulty">Easy</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="instructions">
+        <h3>How to Play:</h3>
+        <ul>
+          <li>Fill in the empty cells with numbers 1-9</li>
+          <li>Each row, column, and 3x3 box must contain all numbers 1-9</li>
+          <li>Click on a cell to enter a number</li>
+          <li>Use the number pad or keyboard to input numbers</li>
+          <li>Generated numbers cannot be changed</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Victory Modal -->
+    <div id="victory-modal" class="modal">
+      <div class="modal-content">
+        <div class="victory-header">
+          <h2>🎉 Congratulations! 🎉</h2>
+          <p>You solved the puzzle!</p>
+        </div>
+        <div class="victory-stats">
+          <div class="stat">
+            <span class="stat-label">Time:</span>
+            <span id="final-time" class="stat-value">00:00</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Difficulty:</span>
+            <span id="final-difficulty" class="stat-value">Easy</span>
+          </div>
+        </div>
+        <div class="victory-actions">
+          <button id="new-game-btn" class="btn secondary">New Game</button>
+          <button id="close-modal-btn" class="btn secondary">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- jsPDF CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script>
+      // Ensure jsPDF is available globally
+      window.addEventListener("load", function () {
+        if (typeof window.jspdf === "undefined") {
+          console.error("jsPDF failed to load");
+        }
+      });
+    </script>
+    <script src="script.js"></script>
+  </body>
+</html>
